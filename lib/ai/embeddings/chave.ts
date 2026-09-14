@@ -66,7 +66,7 @@ export type OrigemDaChave =
 
 export const EXPLICACAO_DA_ORIGEM: Record<OrigemDaChave, string> = {
   binding_do_ponto: "Escolhida por você no painel de Provedores.",
-  credencial_da_organizacao: "Usando a chave OpenAI cadastrada em Credenciais.",
+  credencial_da_organizacao: "Usando a chave cadastrada em Credenciais.",
   gateway_da_instalacao: "Usando o gateway de IA configurado nesta instalação.",
   chave_da_instalacao: "Usando a chave que veio na instalação.",
 };
@@ -78,6 +78,7 @@ export interface ChaveDeEmbedding {
   baseUrl: string | null;
   /** Quando true, a chamada vai pelo gateway (o SDK lê a chave do process.env). */
   viaGateway: boolean;
+  provider?: "openai" | "openrouter";
   origem: OrigemDaChave;
   /** Rótulo da credencial, quando houver — a tela mostra qual chave está valendo. */
   rotulo: string | null;
@@ -98,7 +99,7 @@ export async function resolverChaveDeEmbedding(
 ): Promise<ChaveDeEmbedding | null> {
   const avisos: string[] = [];
 
-  // 1 · A escolha explícita do painel.
+  // 1 · A escolha explícita do painel ou acervo.
   const binding = await lerBindingDeEmbedding(ponto, organizationId);
   if (binding?.credential_id) {
     const credencial = await decifrarCredencial(binding.credential_id, organizationId);
@@ -111,10 +112,15 @@ export async function resolverChaveDeEmbedding(
             `(${MODELO_DE_EMBEDDING}) — trocá-lo exigiria reindexar todo o material de uma vez.`,
         );
       }
+      const baseUrl =
+        binding.base_url ||
+        (credencial.provider === "openrouter" ? "https://openrouter.ai/api/v1" : null);
+
       return {
         apiKey: credencial.apiKey,
-        baseUrl: binding.base_url,
+        baseUrl,
         viaGateway: false,
+        provider: credencial.provider,
         origem: "binding_do_ponto",
         rotulo: credencial.rotulo,
         avisos,
@@ -126,19 +132,20 @@ export async function resolverChaveDeEmbedding(
     );
   }
 
-  // 2 · A credencial OpenAI da organização, sem exigir binding nenhum.
-  const daOrg = await credencialOpenAiDaOrganizacao(organizationId);
+  // 2 · A credencial ativa da organização (OpenAI ou OpenRouter), sem exigir binding nenhum.
+  const daOrg = await credencialDeEmbeddingDaOrganizacao(organizationId);
   if (daOrg) {
     if (daOrg.quantas > 1) {
       avisos.push(
-        `Esta organização tem ${daOrg.quantas} chaves OpenAI cadastradas e nenhuma escolhida para ` +
+        `Esta organização tem ${daOrg.quantas} chaves cadastradas e nenhuma escolhida para ` +
           `a base de conhecimento. Usando "${daOrg.rotulo}" — escolha uma em Provedores para não depender disso.`,
       );
     }
     return {
       apiKey: daOrg.apiKey,
-      baseUrl: null,
+      baseUrl: daOrg.baseUrl,
       viaGateway: false,
+      provider: daOrg.provider,
       origem: "credencial_da_organizacao",
       rotulo: daOrg.rotulo,
       avisos,
@@ -223,12 +230,12 @@ async function lerBindingDeEmbedding(
 async function decifrarCredencial(
   credentialId: string,
   organizationId: string,
-): Promise<{ apiKey: string; rotulo: string } | null> {
+): Promise<{ apiKey: string; rotulo: string; provider: "openai" | "openrouter" } | null> {
   try {
     const admin = createAdminClient();
     const { data } = await admin
       .from("ai_provider_credentials")
-      .select("label, api_key_encrypted, api_key_iv, api_key_tag")
+      .select("label, provider, api_key_encrypted, api_key_iv, api_key_tag")
       .eq("id", credentialId)
       .eq("organization_id", organizationId)
       .eq("is_active", true)
@@ -242,6 +249,7 @@ async function decifrarCredencial(
         tag: byteaToBuffer(data.api_key_tag),
       }),
       rotulo: String((data as { label?: string }).label ?? ""),
+      provider: data.provider === "openrouter" ? "openrouter" : "openai",
     };
   } catch {
     // Sem detalhe no log: qualquer eco aqui corre o risco de carregar material
@@ -251,23 +259,37 @@ async function decifrarCredencial(
 }
 
 /**
- * A credencial OpenAI ativa e validada da organização.
- *
- * Desempate DETERMINÍSTICO pela mais antiga: com duas chaves e nenhuma escolha,
- * "a mais recente" faria o comportamento mudar sozinho no dia em que alguém
- * cadastrasse outra. A tela evita o caso oferecendo a escolha; aqui o que
- * importa é não variar.
+ * A credencial ativa e validada da organização (OpenAI ou OpenRouter).
+ * Prioriza OpenRouter se a organização estiver configurada com provedor openrouter.
  */
-async function credencialOpenAiDaOrganizacao(
+async function credencialDeEmbeddingDaOrganizacao(
   organizationId: string,
-): Promise<{ apiKey: string; rotulo: string; quantas: number } | null> {
+): Promise<{
+  apiKey: string;
+  rotulo: string;
+  quantas: number;
+  provider: "openai" | "openrouter";
+  baseUrl: string | null;
+} | null> {
   try {
     const admin = createAdminClient();
+
+    const { data: orgData } = await admin
+      .from("organizations")
+      .select("settings")
+      .eq("id", organizationId)
+      .maybeSingle();
+
+    const llm = ((orgData?.settings as { llm?: Record<string, unknown> } | null)?.llm ?? {}) as {
+      provider?: string;
+    };
+    const preferOpenRouter = llm.provider === "openrouter";
+
     const { data } = await admin
       .from("ai_provider_credentials")
-      .select("id, label, api_key_encrypted, api_key_iv, api_key_tag")
+      .select("id, label, provider, api_key_encrypted, api_key_iv, api_key_tag")
       .eq("organization_id", organizationId)
-      .eq("provider", "openai")
+      .in("provider", ["openai", "openrouter"])
       .eq("is_active", true)
       .not("validated_at", "is", null)
       .order("created_at", { ascending: true });
@@ -275,21 +297,34 @@ async function credencialOpenAiDaOrganizacao(
     const linhas = (data ?? []) as Array<{
       id: string;
       label: string;
+      provider: string;
       api_key_encrypted: unknown;
       api_key_iv: unknown;
       api_key_tag: unknown;
     }>;
-    const primeira = linhas[0];
-    if (!primeira) return null;
+    if (linhas.length === 0) return null;
+
+    let escolhida = linhas[0];
+    if (preferOpenRouter) {
+      const orCred = linhas.find((c) => c.provider === "openrouter");
+      if (orCred) escolhida = orCred;
+    }
+
+    if (!escolhida) return null;
+
+    const provider = escolhida.provider === "openrouter" ? "openrouter" : "openai";
+    const baseUrl = provider === "openrouter" ? "https://openrouter.ai/api/v1" : null;
 
     return {
       apiKey: decryptKey({
-        ciphertext: byteaToBuffer(primeira.api_key_encrypted),
-        iv: byteaToBuffer(primeira.api_key_iv),
-        tag: byteaToBuffer(primeira.api_key_tag),
+        ciphertext: byteaToBuffer(escolhida.api_key_encrypted),
+        iv: byteaToBuffer(escolhida.api_key_iv),
+        tag: byteaToBuffer(escolhida.api_key_tag),
       }),
-      rotulo: primeira.label,
+      rotulo: escolhida.label,
       quantas: linhas.length,
+      provider,
+      baseUrl,
     };
   } catch {
     return null;

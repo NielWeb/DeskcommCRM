@@ -64,9 +64,9 @@ export default async function AcervoPage() {
       resolverChaveDeEmbedding(activeOrg.orgId),
       supabase
         .from("ai_provider_credentials_safe")
-        .select("id, label, api_key_last4, validated_at, validation_error, is_active")
+        .select("id, label, provider, api_key_last4, validated_at, validation_error, is_active")
         .eq("organization_id", activeOrg.orgId)
-        .eq("provider", "openai")
+        .in("provider", ["openai", "openrouter"])
         .order("created_at", { ascending: true }),
     ]);
 
@@ -88,13 +88,17 @@ export default async function AcervoPage() {
     })
     .filter((a) => a.materiais.length > 0);
 
+  const credsList = (credenciais ?? []) as EstadoDaChave["credenciais_openai"];
+
   const estadoDaChave: EstadoDaChave = {
     pode_indexar: chave !== null,
     origem: chave?.origem ?? null,
     explicacao: chave ? EXPLICACAO_DA_ORIGEM[chave.origem] : null,
     chave_em_uso: chave?.rotulo ?? null,
+    provider_em_uso: chave?.provider ?? null,
     avisos: chave?.avisos ?? [],
-    credenciais_openai: (credenciais ?? []) as EstadoDaChave["credenciais_openai"],
+    credenciais_openai: credsList.filter((c) => c.provider === "openai"),
+    credenciais_disponiveis: credsList,
   };
 
   return (

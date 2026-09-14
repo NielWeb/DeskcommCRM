@@ -414,17 +414,20 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       .limit(1)
       .maybeSingle();
     if (algumDoProvedor) {
-      return fail(
-        "modelo_desconhecido",
-        t(`"${corpo.default_model}" não está no catálogo de ${corpo.provider}`),
-        404,
-      );
+      if (corpo.provider !== "openrouter") {
+        return fail(
+          "modelo_desconhecido",
+          t(`"${corpo.default_model}" não está no catálogo de ${corpo.provider}`),
+          404,
+        );
+      }
+    } else {
+      avisos = [
+        t(
+          `o catálogo de ${corpo.provider} ainda não foi sincronizado nesta instalação, então não deu para conferir "${corpo.default_model}" — se o identificador estiver errado, todo ponto que herda o padrão vai falhar.`,
+        ),
+      ];
     }
-    avisos = [
-      t(
-        `o catálogo de ${corpo.provider} ainda não foi sincronizado nesta instalação, então não deu para conferir "${corpo.default_model}" — se o identificador estiver errado, todo ponto que herda o padrão vai falhar.`,
-      ),
-    ];
   }
 
   // ⚠️ CLIENTE ADMIN, E NÃO É ATALHO: a RLS de `organizations` só deixa

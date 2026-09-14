@@ -75,13 +75,20 @@ export async function embedText(
   // SEM gateway: precisa ser o provider OpenAI EXPLÍCITO. Passar a string com
   // barra aqui não cai no OpenAI direto — no AI SDK, id com barra é resolvido
   // pelo gateway da Vercel mesmo sem chave, entrando no plano anônimo, cujo teto
-  // devolve `GatewayRateLimitError` e derruba a busca na base de conhecimento.
+  const isOpenRouter =
+    chave.provider === "openrouter" ||
+    (chave.baseUrl ? chave.baseUrl.includes("openrouter") : false);
+
+  const modelParaSdk = isOpenRouter
+    ? (modelId.startsWith("openai/") ? modelId : `openai/${modelId}`)
+    : modelId.replace(/^openai\//, "");
+
   const resolvido = chave.viaGateway
     ? modelId
     : createOpenAI({
         apiKey: chave.apiKey ?? "",
         ...(chave.baseUrl ? { baseURL: chave.baseUrl } : {}),
-      }).textEmbeddingModel(modelId.replace(/^openai\//, ""));
+      }).textEmbeddingModel(modelParaSdk);
 
   const result = await embed({
     model: resolvido,
