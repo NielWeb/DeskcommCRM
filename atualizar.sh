@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
-TARGET_VERSION="${1:-v1.23.0}"
+TARGET_VERSION="${1:-v1.29.0}"
 
 echo "=== [Deskcomm] Iniciando atualização para $TARGET_VERSION mantendo customizações ==="
 
