@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-TARGET_VERSION="${1:-v1.29.0}"
+TARGET_VERSION="${1:-v1.30.0}"
 PATCH_FILE="$ROOT_DIR/patches/custom-openrouter-model.patch"
 
 echo "=== [Deskcomm Custom] Iniciando sincronização e customizações para $TARGET_VERSION ==="
@@ -57,19 +57,19 @@ if [ -f "hostgator-setup-kit/_common.sh" ] && [ -f ".env" ]; then
   fi
 fi
 
-# 4. Assegurar que .env e .env.local usem a imagem customizada do app e versão 1.29.0 dos workers
+# 4. Assegurar que .env e .env.local usem a imagem customizada do app e versão 1.30.0 dos workers
 for ENV_FILE in .env .env.local; do
   if [ -f "$ENV_FILE" ]; then
-    echo "→ Configurando $ENV_FILE para imagem customizada e workers 1.29.0..."
+    echo "→ Configurando $ENV_FILE para imagem customizada e workers 1.30.0..."
     sed -i 's|^APP_IMAGE=.*|APP_IMAGE=deskcomm-app:custom|' "$ENV_FILE"
     sed -i 's|^APP_PULL_POLICY=.*|APP_PULL_POLICY=never|' "$ENV_FILE"
-    sed -i 's|^WORKER_IMAGE=.*|WORKER_IMAGE=ghcr.io/melgarafael/deskcomm-worker:1.29.0|' "$ENV_FILE"
-    sed -i 's|^SCHEDULER_IMAGE=.*|SCHEDULER_IMAGE=ghcr.io/melgarafael/deskcomm-scheduler:1.29.0|' "$ENV_FILE"
+    sed -i 's|^WORKER_IMAGE=.*|WORKER_IMAGE=ghcr.io/melgarafael/deskcomm-worker:1.30.0|' "$ENV_FILE"
+    sed -i 's|^SCHEDULER_IMAGE=.*|SCHEDULER_IMAGE=ghcr.io/melgarafael/deskcomm-scheduler:1.30.0|' "$ENV_FILE"
   fi
 done
 
 # 5. Reconstruir imagem do app e atualizar contêineres
-echo "→ Puxando imagens oficiais atualizadas (worker e scheduler 1.29.0)..."
+echo "→ Puxando imagens oficiais atualizadas (worker e scheduler 1.30.0)..."
 docker compose pull worker scheduler 2>/dev/null || true
 
 echo "→ Reconstruindo imagem Docker deskcomm-app:custom..."
@@ -82,4 +82,4 @@ docker compose "${COMPOSE_ARGS[@]}" build app
 echo "→ Reiniciando serviços (app, worker, scheduler)..."
 docker compose up -d app worker scheduler
 
-echo "=== [Deskcomm Custom] Concluído com sucesso! App v1.29.0 no ar com customizações OpenRouter. ==="
+echo "=== [Deskcomm Custom] Concluído com sucesso! App v1.30.0 no ar com customizações OpenRouter. ==="
