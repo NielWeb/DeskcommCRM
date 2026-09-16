@@ -42,17 +42,17 @@
  */
 import type { Logger } from '../obs/logger';
 
-/** Ver o cabeçalho: a parcela que não depende do tamanho do texto. */
-export const ATRASO_NOTAR_MS = 900;
+/** Ver o cabeçalho: parcela fixa de leitura. */
+export const ATRASO_NOTAR_MS = 500;
 
-/** ≈45 caracteres/s — rápido de propósito; ver o cabeçalho. */
-export const MS_POR_CARACTERE = 22;
+/** Digitação acelerada (ms por caractere). */
+export const MS_POR_CARACTERE = 10;
 
-/** Piso do throttle anti-ban do canal (CLAUDE.md). Abaixo dele o atraso não significa nada. */
+/** Piso do throttle anti-ban do canal (CLAUDE.md: 1 msg / 1.2s). */
 export const ATRASO_MINIMO_MS = 1200;
 
-/** Acima disto o silêncio lê como queda, não como digitação. */
-export const ATRASO_MAXIMO_MS = 7500;
+/** Teto de atraso humano. */
+export const ATRASO_MAXIMO_MS = 3000;
 
 /**
  * Quanto esperar antes de mandar `texto`, em ms. Pura — é o que a torna
