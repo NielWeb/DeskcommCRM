@@ -208,6 +208,10 @@ export const crmFindFreeSlots: McpToolDefinition<typeof horariosLivresShape> = {
   requiresScope: "mcp:read",
   handler: async (input, ctx) => {
     const agora = new Date();
+    if (input.dia !== undefined && input.dias_a_frente === 1) {
+      delete input.dias_a_frente;
+    }
+
     if (input.dia !== undefined && input.dias_a_frente !== undefined) {
       return {
         horarios: [],
