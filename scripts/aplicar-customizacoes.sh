@@ -15,12 +15,17 @@ echo "=== [Deskcomm Custom] Iniciando sincronização e customizações para $TA
 echo "→ Verificando versão git atual..."
 git fetch --all --tags --prune --quiet 2>/dev/null || true
 
-CURRENT_REF="$(git describe --tags --exact-match HEAD 2>/dev/null || git rev-parse --short HEAD)"
-if [ "$CURRENT_REF" != "$TARGET_VERSION" ]; then
-  echo "→ Ajustando repositório para a versão oficial $TARGET_VERSION..."
-  git checkout -- . || true
-  git checkout "$TARGET_VERSION"
-  echo "✓ Checkout da versão $TARGET_VERSION concluído."
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+if [[ "$CURRENT_BRANCH" == custom/* ]]; then
+  echo "→ Mantendo branch customizada ativa: $CURRENT_BRANCH"
+else
+  CURRENT_REF="$(git describe --tags --exact-match HEAD 2>/dev/null || git rev-parse --short HEAD)"
+  if [ "$CURRENT_REF" != "$TARGET_VERSION" ]; then
+    echo "→ Ajustando repositório para a versão oficial $TARGET_VERSION..."
+    git checkout -- . || true
+    git checkout "$TARGET_VERSION"
+    echo "✓ Checkout da versão $TARGET_VERSION concluído."
+  fi
 fi
 
 # 2. Aplicar patch customizado
