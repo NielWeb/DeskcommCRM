@@ -28,21 +28,25 @@ else
   fi
 fi
 
-# 2. Aplicar patch customizado
-echo "→ Verificando patch custom-openrouter-model..."
-if [ -f "$PATCH_FILE" ]; then
-  if git apply --check --reverse "$PATCH_FILE" >/dev/null 2>&1; then
-    echo "✓ Patch custom-openrouter-model já está aplicado no código."
+# 2. Aplicar patch customizado (somente se não estiver em branch customizada)
+if [[ "$CURRENT_BRANCH" != custom/* ]]; then
+  echo "→ Verificando patch custom-openrouter-model..."
+  if [ -f "$PATCH_FILE" ]; then
+    if git apply --check --reverse "$PATCH_FILE" >/dev/null 2>&1; then
+      echo "✓ Patch custom-openrouter-model já está aplicado no código."
+    else
+      echo "→ Aplicando patch custom-openrouter-model..."
+      git apply --3way "$PATCH_FILE" 2>/dev/null || git apply "$PATCH_FILE" || {
+        echo "⚠ Conflito ao aplicar patch automaticamente. Verifique com git status."
+        exit 1
+      }
+      echo "✓ Patch aplicado com sucesso."
+    fi
   else
-    echo "→ Aplicando patch custom-openrouter-model..."
-    git apply --3way "$PATCH_FILE" 2>/dev/null || git apply "$PATCH_FILE" || {
-      echo "⚠ Conflito ao aplicar patch automaticamente. Verifique com git status."
-      exit 1
-    }
-    echo "✓ Patch aplicado com sucesso."
+    echo "⚠ Arquivo de patch $PATCH_FILE não encontrado."
   fi
 else
-  echo "⚠ Arquivo de patch $PATCH_FILE não encontrado."
+  echo "✓ Branch customizada ativa — alterações já incorporadas nos commits."
 fi
 
 # 3. Atualizar schema do banco de dados (baseline + migração customizada 0263)
