@@ -57,29 +57,30 @@ if [ -f "hostgator-setup-kit/_common.sh" ] && [ -f ".env" ]; then
   fi
 fi
 
-# 4. Assegurar que .env e .env.local usem a imagem customizada do app e versão 1.30.0 dos workers
+# 4. Assegurar que .env e .env.local usem imagens customizadas do app e worker
 for ENV_FILE in .env .env.local; do
   if [ -f "$ENV_FILE" ]; then
-    echo "→ Configurando $ENV_FILE para imagem customizada e workers 1.30.0..."
+    echo "→ Configurando $ENV_FILE para imagens customizadas (app e worker)..."
     sed -i 's|^APP_IMAGE=.*|APP_IMAGE=deskcomm-app:custom|' "$ENV_FILE"
     sed -i 's|^APP_PULL_POLICY=.*|APP_PULL_POLICY=never|' "$ENV_FILE"
-    sed -i 's|^WORKER_IMAGE=.*|WORKER_IMAGE=ghcr.io/melgarafael/deskcomm-worker:1.30.0|' "$ENV_FILE"
+    sed -i 's|^WORKER_IMAGE=.*|WORKER_IMAGE=deskcomm-worker:custom|' "$ENV_FILE"
+    sed -i 's|^WORKER_PULL_POLICY=.*|WORKER_PULL_POLICY=never|' "$ENV_FILE"
     sed -i 's|^SCHEDULER_IMAGE=.*|SCHEDULER_IMAGE=ghcr.io/melgarafael/deskcomm-scheduler:1.30.0|' "$ENV_FILE"
   fi
 done
 
-# 5. Reconstruir imagem do app e atualizar contêineres
-echo "→ Puxando imagens oficiais atualizadas (worker e scheduler 1.30.0)..."
-docker compose pull worker scheduler 2>/dev/null || true
+# 5. Reconstruir imagens customizadas e atualizar contêineres
+echo "→ Puxando scheduler oficial 1.30.0..."
+docker compose pull scheduler 2>/dev/null || true
 
-echo "→ Reconstruindo imagem Docker deskcomm-app:custom..."
+echo "→ Reconstruindo imagens Docker deskcomm-app:custom e deskcomm-worker:custom..."
 COMPOSE_ARGS=(-f docker-compose.prod.yml)
 [ -f docker-compose.nginx.yml ] && COMPOSE_ARGS+=(-f docker-compose.nginx.yml)
 [ -f docker-compose.build.yml ] && COMPOSE_ARGS+=(-f docker-compose.build.yml)
 
-docker compose "${COMPOSE_ARGS[@]}" build app
+docker compose "${COMPOSE_ARGS[@]}" build app worker
 
 echo "→ Reiniciando serviços (app, worker, scheduler)..."
 docker compose up -d app worker scheduler
 
-echo "=== [Deskcomm Custom] Concluído com sucesso! App v1.30.0 no ar com customizações OpenRouter. ==="
+echo "=== [Deskcomm Custom] Concluído com sucesso! App e Worker atualizados com correções de agenda e OpenRouter. ==="
