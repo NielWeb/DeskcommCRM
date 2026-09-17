@@ -170,6 +170,89 @@ describe("agendaStallGate — veta a promessa vazia, nunca a checagem de verdade
   it("está na cadeia global e é o mesmo objeto exportado", () => {
     expect(BEFORE_SEND_GATES).toContain(agendaStallGate);
   });
+
+  // ─── FRASES MEDIDAS EM PRODUÇÃO 2026-09-17 (tenant InterLuz, gpt-5.6-luna) ───
+  // O modelo reformulou em 3ª pessoa para escapar do gate que só pegava 1ª pessoa.
+
+  it("veta 3ª pessoa: 'A equipe precisa confirmar os horários disponíveis'", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: { active: true, podeMarcar: true, toolCalledThisTurn: false },
+        body: "Daniel, para sexta-feira, 18/09, os atendimentos de consulta são presenciais em Ribeirão Preto. A equipe precisa confirmar os horários disponíveis para essa data. Você prefere atendimento pela manhã ou à tarde?",
+      }),
+    );
+    expect(v.pass).toBe(false);
+  });
+
+  it("veta delegação: 'te retorno assim que tiver a disponibilidade'", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: { active: true, podeMarcar: true, toolCalledThisTurn: false },
+        body: "Daniel, vou confirmar os horários disponíveis para sexta-feira pela manhã e te retorno assim que tiver a disponibilidade.",
+      }),
+    );
+    expect(v.pass).toBe(false);
+  });
+
+  it("veta delegação: 'Assim que eu tiver os horários, te envio por aqui'", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: { active: true, podeMarcar: true, toolCalledThisTurn: false },
+        body: "Daniel, estou confirmando a disponibilidade para sexta-feira, 18/09, pela manhã. Assim que eu tiver os horários, te envio por aqui.",
+      }),
+    );
+    expect(v.pass).toBe(false);
+  });
+
+  it("veta 'A equipe vai verificar a disponibilidade'", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: { active: true, podeMarcar: true, toolCalledThisTurn: false },
+        body: "A equipe vai verificar a disponibilidade de horários para sexta-feira.",
+      }),
+    );
+    expect(v.pass).toBe(false);
+  });
+
+  it("veta 'Vou checar a agenda'", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: { active: true, podeMarcar: true, toolCalledThisTurn: false },
+        body: "Vou checar a agenda para ver as vagas disponíveis.",
+      }),
+    );
+    expect(v.pass).toBe(false);
+  });
+
+  it("veta delegação com 'te aviso': 'Assim que tiver os horários te aviso'", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: { active: true, podeMarcar: true, toolCalledThisTurn: false },
+        body: "Assim que tiver os horários te aviso por aqui.",
+      }),
+    );
+    expect(v.pass).toBe(false);
+  });
+
+  it("frase legítima que NÃO menciona verificar/confirmar/retornar com horários passa", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: { active: true, podeMarcar: true, toolCalledThisTurn: false },
+        body: "Nossos atendimentos de psiquiatria são presenciais, em Ribeirão Preto. Deseja agendar uma consulta?",
+      }),
+    );
+    expect(v.pass).toBe(true);
+  });
+
+  it("delegação com tool chamada neste turno passa", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: { active: true, podeMarcar: true, toolCalledThisTurn: true },
+        body: "Daniel, te envio os horários disponíveis para sexta-feira.",
+      }),
+    );
+    expect(v.pass).toBe(true);
+  });
 });
 
 /**

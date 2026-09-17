@@ -157,7 +157,7 @@ const horariosLivresShape = {
     .min(1)
     .max(MAXIMO_DE_DIAS)
     .optional()
-    .describe(`quantos dias olhar a partir de agora (padrão ${DIAS_PADRAO}). Use ESTE campo se você não sabe a data de hoje.`),
+    .describe(`quantos dias olhar a partir de agora (padrão ${DIAS_PADRAO}). Use SOMENTE para períodos relativos sem data exata. NUNCA envie este campo junto com 'dia'.`),
   /**
    * A data civil é deliberadamente diferente de um ISO com offset. O modelo sabe
    * que o cliente pediu "dia 13", mas não sabe onde começa esse dia no fuso da
@@ -168,7 +168,7 @@ const horariosLivresShape = {
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "dia deve estar em YYYY-MM-DD")
     .optional()
-    .describe("dia civil pedido pelo cliente, em YYYY-MM-DD. Use para uma data específica; o servidor aplica o fuso da agenda."),
+    .describe("dia civil pedido pelo cliente, em YYYY-MM-DD. Use para uma data específica; o servidor aplica o fuso da agenda. NUNCA envie 'dias_a_frente' se passar este campo."),
   owner_user_id: z.string().uuid().optional(),
   limite: z
     .number()
@@ -176,7 +176,7 @@ const horariosLivresShape = {
     .min(1)
     .max(HORARIOS_MAX)
     .optional()
-    .describe(`quantos horários no máximo (padrão ${HORARIOS_PADRAO})`),
+    .describe(`quantos horários no máximo (padrão ${HORARIOS_PADRAO}). Em um dia específico ('dia'), todos os horários do dia são retornados automaticamente.`),
 };
 
 export const crmFindFreeSlots: McpToolDefinition<typeof horariosLivresShape> = {
@@ -186,13 +186,16 @@ export const crmFindFreeSlots: McpToolDefinition<typeof horariosLivresShape> = {
     "do atendente, folgas, o que ele já tem marcado e a agenda externa dele. " +
     "Use ANTES de oferecer horário ao cliente: oferecer um horário que não existe e depois voltar " +
     "atrás é pior do que demorar um instante a mais para responder. " +
-    "Cada horário vem em dois formatos: `inicio` é o instante que você COPIA para `starts_at` de " +
-    "`crm_book_appointment`, sem reescrever; `quando` já está na hora local da agenda e é o que você " +
-    "fala com a pessoa. " +
+    "Cada horário vem em dois formatos: `inicio` é o instante UTC que você COPIA EXATAMENTE para " +
+    "`starts_at` de `crm_book_appointment`; e `quando` é a hora local do cliente. " +
+    "ATENÇÃO: `inicio` vai parecer estar 3 ou 4 horas na frente (ex: T14:00Z significa 11:00 local). " +
+    "NUNCA compare a hora que o cliente pediu com o campo `inicio`. Sempre encontre a hora certa " +
+    "olhando APENAS o campo `quando`. Quando achar a hora certa no `quando`, use o `inicio` dele " +
+    "em `crm_book_appointment`. " +
     "A lista vem cortada no `limite` e espalhada ao longo do período: `total_de_horarios` diz quantos " +
     "existem e `ha_mais` avisa que sobraram — lista cortada NÃO é agenda cheia. " +
-    "QUANDO: informe `dias_a_frente` (a partir de agora — ex.: 7 para a próxima semana). " +
-    "Para uma data que o cliente nomeou, use `dia` em YYYY-MM-DD; o servidor aplica o fuso da agenda. " +
+    "QUANDO: para período relativo, informe `dias_a_frente` (a partir de agora — ex.: 7 para a próxima semana). " +
+    "Para uma data que o cliente nomeou, use APENAS `dia` em YYYY-MM-DD (NUNCA passe `dias_a_frente` junto com `dia`). " +
     "NUNCA monte um intervalo UTC por conta própria. " +
     "Lista vazia NÃO é erro e NÃO significa que a agenda está cheia: leia `publicou_horarios`. " +
     "Se ele for false, o atendente ainda não publicou os horários dele — não invente horários e " +
@@ -253,11 +256,18 @@ export const crmFindFreeSlots: McpToolDefinition<typeof horariosLivresShape> = {
       input.dia === undefined
         ? consulta.slots
         : consulta.slots.filter((s) => diaLocalISO(s.inicio, consulta.fusoDaRegra) === input.dia);
+    // Para um dia específico, devolve todos os horários do dia (até HORARIOS_MAX=50)
+    // para nunca cortar a tarde ou a noite mesmo se limite baixo foi passado.
+    const limiteEfetivo =
+      input.dia !== undefined
+        ? HORARIOS_MAX
+        : (input.limite ?? HORARIOS_PADRAO);
     const escolhidos = espalhaPorDia(
       slotsDoPeriodo,
       consulta.fusoDaRegra,
-      input.limite ?? HORARIOS_PADRAO,
+      limiteEfetivo,
     );
+
 
     return {
       horarios: escolhidos.map((s) => ({
@@ -426,7 +436,7 @@ async function semDerrubarOTurno<T>(
 
 const marcarShape = {
   event_type_slug: z.string().min(1).describe("o identificador legível do tipo de atendimento"),
-  starts_at: z.string().datetime({ offset: true }).describe("o instante exato do início, vindo de `crm_find_free_slots`"),
+  starts_at: z.string().datetime({ offset: true }).describe("o instante exato do início, copiando exatamente o valor de `inicio` de crm_find_free_slots"),
   contact_id: z.string().uuid().describe("quem vai ser atendido"),
   owner_user_id: z.string().uuid().optional(),
   title: z.string().min(1).max(200).optional(),
@@ -442,8 +452,9 @@ export const crmBookAppointment: McpToolDefinition<typeof marcarShape> = {
     "NÃO use para 'voltar a falar com o cliente depois' — isso é retorno, e a ferramenta é " +
     "`crm_schedule_followup`. A diferença: aqui as DUAS partes combinaram e alguém vai esperar; " +
     "lá é decisão interna nossa e o cliente não sabe de nada. " +
-    "Chame `crm_find_free_slots` ANTES e use um `starts_at` que veio de lá — marcar em horário que " +
-    "não está livre é recusado, e a recusa manda você consultar de novo. " +
+    "Chame `crm_find_free_slots` ANTES e copie o campo `inicio` do horário escolhido para `starts_at` — " +
+    "copie exatamente o valor UTC (ex: 2026-09-18T14:00:00.000Z), mesmo que pareça adiantado em relação à hora local. " +
+    "Marcar em horário que não está livre é recusado, e a recusa manda você consultar de novo. " +
     "⚠️ Alguns atendimentos exigem que uma pessoa da equipe aprove: nesses, o horário fica " +
     "RESERVADO e o retorno traz `aguarda_confirmacao: true`. Quando vier assim, NÃO diga que está " +
     "confirmado — diga que separou o horário e que a equipe confirma.",
@@ -518,7 +529,7 @@ export const crmBookAppointment: McpToolDefinition<typeof marcarShape> = {
 
 const remarcarShape = {
   appointment_id: z.string().uuid(),
-  new_starts_at: z.string().datetime({ offset: true }).describe("o novo início, vindo de `crm_find_free_slots`"),
+  new_starts_at: z.string().datetime({ offset: true }).describe("o novo início, copiando exatamente o valor de `inicio` de crm_find_free_slots"),
   notes: z.string().max(2000).optional(),
 };
 
@@ -531,7 +542,9 @@ export const crmRescheduleAppointment: McpToolDefinition<typeof remarcarShape> =
     "continua um só e o lembrete é refeito sozinho. Se você cancelar e marcar, o cliente recebe " +
     "dois avisos contraditórios e a linha do tempo dele passa a contar que ele desistiu e voltou — " +
     "o que não aconteceu. " +
-    "Confirme o horário novo com `crm_find_free_slots` antes: horário indisponível é recusado.",
+    "Confirme o horário novo com `crm_find_free_slots` antes, e copie o campo `inicio` do " +
+    "horário escolhido para `new_starts_at` (exatamente o valor UTC, mesmo parecendo adiantado). " +
+    "Horário indisponível é recusado.",
   inputSchema: remarcarShape,
   category: "write",
   requiresRole: "ai_operator",
