@@ -246,12 +246,20 @@ function CartaoDoPadrao({ dados, aoSalvar }: { dados: Dados; aoSalvar: () => Pro
   const t = useT();
   const [provider, setProvider] = useState(dados.padrao.provider);
   const [modelId, setModelId] = useState(dados.padrao.defaultModel ?? "");
+  const [customMode, setCustomMode] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
   const modelosDoProvedor = useMemo(
     () => dados.modelos.filter((m) => m.provider === provider),
     [dados.modelos, provider],
   );
+
+  const isCustom =
+    customMode ||
+    (provider === "openrouter" &&
+      modelId !== "" &&
+      !modelosDoProvedor.some((m) => m.model_id === modelId)) ||
+    modelosDoProvedor.length === 0;
 
   // Quantos pontos herdam HOJE. É o número que explica por que esta caixa
   // importa: numa instalação nova são 24 de 25, e trocar aqui muda os 24.
@@ -311,6 +319,7 @@ function CartaoDoPadrao({ dados, aoSalvar }: { dados: Dados; aoSalvar: () => Pro
               // sincronizado a rota confere o par (provider, model_id) e
               // devolveria 404.
               setModelId("");
+              setCustomMode(false);
             }}
           >
             <SelectTrigger data-testid="padrao-provider">
@@ -327,30 +336,33 @@ function CartaoDoPadrao({ dados, aoSalvar }: { dados: Dados; aoSalvar: () => Pro
         </div>
 
         <div className="min-w-64">
-          <Label className="text-xs">{t("Modelo")}</Label>
-          {/*
-            AQUI VALE A MESMA REGRA DO `CartaoDoPonto`, e pelo mesmo motivo: o
-            `baseline.sql` semeia `ai_models` só para anthropic/openai/google, e
-            os modelos da OpenRouter só chegam quando a sincronização do catálogo
-            roda. Numa instalação recém-feita — ou sem scheduler — o combo abria
-            com zero opções e o "Salvar padrão" ficava desabilitado, sem nenhum
-            caminho para gravar o modelo. Com o catálogo vazio o campo vira texto
-            livre, e a rota grava avisando que não deu para conferir o
-            identificador.
-          */}
-          {modelosDoProvedor.length === 0 ? (
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">{t("Modelo")}</Label>
+            {provider === "openrouter" && (
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                onClick={() => setCustomMode(!isCustom)}
+              >
+                {isCustom ? t("Escolher da lista") : t("Digitar modelo customizado")}
+              </button>
+            )}
+          </div>
+          {isCustom ? (
             <>
               <Input
                 value={modelId}
-                onChange={(e) => setModelId(e.target.value)}
+                onChange={(e) => setModelId(e.target.value.trim())}
                 placeholder="ex.: meta-llama/llama-3.3-70b-instruct"
                 data-testid="padrao-modelo"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t(
-                  "O catálogo deste provedor ainda não foi baixado. Digite o identificador do modelo como o provedor o nomeia — a lista completa aparece sozinha depois da primeira sincronização.",
-                )}
-              </p>
+              {modelosDoProvedor.length === 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t(
+                    "O catálogo deste provedor ainda não foi baixado. Digite o identificador do modelo como o provedor o nomeia — a lista completa aparece sozinha depois da primeira sincronização.",
+                  )}
+                </p>
+              )}
             </>
           ) : (
             <Select value={modelId} onValueChange={setModelId}>
@@ -433,9 +445,16 @@ function CartaoDoPonto({
   const [modelId, setModelId] = useState(ponto.efetivo.modelId ?? "");
   const [credentialId, setCredentialId] = useState(ponto.efetivo.credentialId ?? "");
   const [baseUrl, setBaseUrl] = useState(ponto.efetivo.baseUrl ?? "");
+  const [customMode, setCustomMode] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
   const modelosDoProvider = dados.modelos.filter((m) => m.provider === provider);
+  const isCustom =
+    customMode ||
+    (provider === "openrouter" &&
+      modelId !== "" &&
+      !modelosDoProvider.some((m) => m.model_id === modelId)) ||
+    modelosDoProvider.length === 0;
   const credsDoProvider = dados.credenciais.filter((c) => c.provider === provider);
   // Endpoint próprio só faz sentido em provedor compatível com a API da OpenAI
   // — é a mesma condição que `lib/ai/pontos/provedores.ts` declara e que o
@@ -546,6 +565,7 @@ function CartaoDoPonto({
                 setProvider(v);
                 setModelId("");
                 setCredentialId("");
+                setCustomMode(false);
               }}
             >
               <SelectTrigger data-testid={`provider-${ponto.id}`}>
@@ -562,30 +582,33 @@ function CartaoDoPonto({
           </div>
 
           <div>
-            <Label className="text-xs">{t("Modelo")}</Label>
-            {/*
-              Catálogo vazio não pode ser beco sem saída. O `baseline.sql` semeia
-              `ai_models` só para anthropic/openai/google; os da OpenRouter só
-              chegam quando o cron diário roda. Numa VPS recém-instalada, quem
-              escolhia OpenRouter via um combo com zero opções e o Salvar
-              desabilitado — travado até as 04h15 do dia seguinte, e para sempre
-              num deploy sem scheduler. Aqui o campo vira texto livre: a API já
-              aceita modelo fora do catálogo e devolve o aviso de que não
-              conhece (`validar-binding.ts`, `conhecido: false`).
-            */}
-            {modelosDoProvider.length === 0 ? (
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">{t("Modelo")}</Label>
+              {provider === "openrouter" && modelosDoProvider.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  onClick={() => setCustomMode(!isCustom)}
+                >
+                  {isCustom ? t("Escolher da lista") : t("Digitar modelo customizado")}
+                </button>
+              )}
+            </div>
+            {isCustom ? (
               <>
                 <Input
                   value={modelId}
-                  onChange={(e) => setModelId(e.target.value)}
+                  onChange={(e) => setModelId(e.target.value.trim())}
                   placeholder="ex.: meta-llama/llama-3.3-70b-instruct"
                   data-testid={`modelo-${ponto.id}`}
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t(
-                    "O catálogo deste provedor ainda não foi baixado. Digite o identificador do modelo como o provedor o nomeia — a lista completa aparece sozinha depois da primeira sincronização.",
-                  )}
-                </p>
+                {modelosDoProvider.length === 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t(
+                      "O catálogo deste provedor ainda não foi baixado. Digite o identificador do modelo como o provedor o nomeia — a lista completa aparece sozinha depois da primeira sincronização.",
+                    )}
+                  </p>
+                )}
               </>
             ) : (
               <Select value={modelId} onValueChange={setModelId}>

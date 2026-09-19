@@ -511,7 +511,19 @@ export const internalVocabularyGate: Gate = {
  * segue não medido neste repo.
  */
 const AGENDA_STALL_PATTERN =
-  /\b(vou|estou|iremos|vamos)\b[^.!?\n]{0,10}\b(verificando|verificar|confirmando|confirmar|consultando|consultar|organizando|organizar)\b(?:[^.!?\n]{0,80}\b(?:hor[aá]rios?|agenda|disponibilidade|agendamento|marca[çc][aã]o|encaixe|vagas?)\b|\s+(?:[oa]s?\s+)?(?:meu\s+|minha\s+|seu\s+|sua\s+|nosso\s+|nossa\s+|teu\s+|tua\s+)?(?:atendimento|consulta|sess[aã]?o)\b)/i;
+  /\b(vou|estou|iremos|vamos|vai|vao|precisa|precisamos|precisam|deve|devemos|devem|posso|podemos)\b[^.!?\n]{0,15}\b(verificando|verificar|confirmando|confirmar|consultando|consultar|checando|checar|conferindo|conferir|olhando|olhar|vendo|ver|organizando|organizar)\b(?:[^.!?\n]{0,80}\b(?:hor[aá]rios?|agenda|disponibilidade|agendamento|marca[çc][aã]o|encaixe|vagas?)\b|\s+(?:[oa]s?\s+)?(?:meu\s+|minha\s+|seu\s+|sua\s+|nosso\s+|nossa\s+|teu\s+|tua\s+)?(?:atendimento|consulta|sess[aã]?o)\b)/i;
+
+/**
+ * Padrão de DELEGAÇÃO — o modelo não promete em 1ª pessoa, mas delega para "a equipe" sem
+ * chamar a tool. Medido em produção 2026-09-17 (tenant InterLuz, gpt-5.6-luna):
+ *   "Assim que eu tiver os horários, te envio por aqui"
+ *   "te retorno assim que tiver a disponibilidade"
+ *   "te envio por aqui" (próximo de menção a horários)
+ * Separado do STALL_PATTERN porque a gramática é diferente — aqui é uma promessa de
+ * RETORNO com informação de agenda, e o substantivo pode vir antes do verbo.
+ */
+const AGENDA_DELEGATION_PATTERN =
+  /\b(te retorno|te envio|te passo|te confirmo|te informo|te aviso|te mando|lhe retorno|lhe envio|lhe passo|lhe confirmo|lhe informo|lhe aviso|lhe mando|ja te|retorno para voc[eê]|envio para voc[eê]|passo para voc[eê]|aviso voc[eê])\b[^.!?\n]{0,60}\b(hor[aá]rios?|agenda|disponibilidade|agendamento|vagas?)\b|\b(hor[aá]rios?|agenda|disponibilidade|agendamento|vagas?)\b[^.!?\n]{0,60}\b(te retorno|te envio|te passo|te confirmo|te informo|te aviso|te mando|lhe retorno|lhe envio|lhe passo|lhe confirmo|lhe informo|lhe aviso|lhe mando|ja te|retorno para voc[eê]|envio para voc[eê]|passo para voc[eê]|aviso voc[eê])\b/i;
 
 /**
  * Padrão irmão do `AGENDA_STALL_PATTERN`, mas para a outra metade do mesmo defeito: não
@@ -582,7 +594,8 @@ export const agendaStallGate: Gate = {
     const bodySemAcento = semAcento(ctx.body);
     const stall = AGENDA_STALL_PATTERN.test(bodySemAcento);
     const confirmedSemChecar = AGENDA_CONFIRMED_PATTERN.test(bodySemAcento);
-    if (!stall && !confirmedSemChecar) return { pass: true };
+    const delegation = AGENDA_DELEGATION_PATTERN.test(bodySemAcento);
+    if (!stall && !confirmedSemChecar && !delegation) return { pass: true };
     return {
       pass: false,
       code: 'agenda_stall_sem_ferramenta',
@@ -597,13 +610,13 @@ export const agendaStallGate: Gate = {
           ctx.agenda.ferramentas.length > 0
             ? nomesDasFerramentas(ctx.agenda.ferramentas)
             : 'a ferramenta de agenda';
-        return confirmedSemChecar
-          ? `Você afirmou que um horário está confirmado/agendado sem ter chamado ${ferramentas} ` +
+        if (confirmedSemChecar) {
+          return `Você afirmou que um horário está confirmado/agendado sem ter chamado ${ferramentas} ` +
             'NESTE turno. Nunca diga que está confirmado sem a ferramenta ter registrado de fato — ' +
-            'chame a ferramenta e responda com base no retorno dela.'
-          : `Você prometeu verificar/confirmar um horário sem ter chamado ${ferramentas} NESTE ` +
-            'turno. Chame a ferramenta agora e responda com base no retorno dela — não repita a ' +
-            'promessa sem checar.';
+            'chame a ferramenta e responda com base no retorno dela.';
+        }
+        return `Você prometeu verificar/confirmar horário ou retornar com disponibilidade sem ter chamado ${ferramentas} NESTE ` +
+          'turno. NÃO repita a promessa: chame a ferramenta AGORA, leia o retorno, e responda ao cliente com os horários reais.';
       })(),
     };
   },

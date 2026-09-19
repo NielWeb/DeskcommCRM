@@ -22043,15 +22043,25 @@ begin
     raise exception 'channel_session_offline' using errcode = 'P0001';
   end if;
 
-  select count(*)
-    into v_model_count
-  from public.ai_models m
-  where m.provider = v_version.provider
-    and m.model_id = v_version.model
-    and m.deprecated_at is null;
+  if v_version.provider = 'openrouter' then
+    insert into public.ai_models (
+      provider, model_id, display_name, source, supports_tools, supports_vision, deprecated_at
+    ) values (
+      'openrouter', v_version.model, v_version.model, 'openrouter_custom', true, true, null
+    )
+    on conflict (provider, model_id) do update
+      set deprecated_at = null;
+  else
+    select count(*)
+      into v_model_count
+    from public.ai_models m
+    where m.provider = v_version.provider
+      and m.model_id = v_version.model
+      and m.deprecated_at is null;
 
-  if v_model_count = 0 then
-    raise exception 'model_not_found' using errcode = 'P0001';
+    if v_model_count = 0 then
+      raise exception 'model_not_found' using errcode = 'P0001';
+    end if;
   end if;
 
   v_previous_version_id := v_agent.published_version_id;

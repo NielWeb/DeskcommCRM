@@ -38,7 +38,7 @@ export async function publishAgentVersion(
 ): Promise<PublishResult> {
   const { data: version, error: readError } = await admin
     .from("ai_agent_versions")
-    .select("provider,credential_id")
+    .select("provider,credential_id,model")
     .eq("organization_id", params.orgId)
     .eq("agent_id", params.agentId)
     .eq("id", params.versionId)
@@ -48,6 +48,22 @@ export async function publishAgentVersion(
   const platform = version.credential_id === null;
   if (platform && !chaveDePlataforma(version.provider))
     return { ok: false, code: "credential_missing", message: "credential_missing" };
+
+  if (version.provider === "openrouter" && version.model) {
+    await admin.from("ai_models").upsert(
+      {
+        provider: "openrouter",
+        model_id: version.model,
+        display_name: version.model,
+        source: "openrouter_custom",
+        supports_tools: true,
+        supports_vision: true,
+        deprecated_at: null,
+      },
+      { onConflict: "provider,model_id", ignoreDuplicates: false },
+    );
+  }
+
   const { data, error } = await admin.rpc("fn_publish_ai_agent_version", {
     p_org_id: params.orgId,
     p_agent_id: params.agentId,

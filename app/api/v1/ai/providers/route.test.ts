@@ -243,6 +243,17 @@ describe("PATCH /api/v1/ai/providers — padrão da organização", () => {
     expect(json.data.avisos[0]).toContain(modelo);
   });
 
+  it("aceita modelo customizado para openrouter mesmo com catálogo presente", async () => {
+    estadoDeSessao.catalogo = ["openai/gpt-4o"];
+    const modelo = "anthropic/claude-3.5-sonnet:custom";
+    const { PATCH } = await import("./route");
+    const res = await PATCH(requisicao({ provider: "openrouter", default_model: modelo }));
+
+    expect(res.status).toBe(200);
+    const settings = (estado.atualizacao?.settings ?? {}) as Record<string, unknown>;
+    expect(settings.llm).toEqual({ provider: "openrouter", default_model: modelo });
+  });
+
   it("não avisa quando o modelo está no catálogo do provedor", async () => {
     // O aviso não pode virar ruído na instalação sadia: com o catálogo
     // sincronizado, gravar um modelo conhecido não rende aviso nenhum.

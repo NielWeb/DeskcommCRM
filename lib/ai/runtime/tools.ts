@@ -94,6 +94,17 @@ function wrapMcpTool(
           campos: higiene.descartados.join(","),
         });
       }
+      if (
+        def.name === "crm_find_free_slots" &&
+        argsRecord.dia &&
+        argsRecord.dias_a_frente !== undefined
+      ) {
+        logger.info("dias_a_frente redundante descartado do payload da tool pois dia foi fornecido", {
+          dia: argsRecord.dia,
+          dias_a_frente: argsRecord.dias_a_frente,
+        });
+        delete argsRecord.dias_a_frente;
+      }
       try {
         ensureScope(input.auth.scopes, def.requiresScope);
         ensureRole(input.auth.role, def.requiresRole);

@@ -125,7 +125,7 @@ const envSchema = z.object({
   EVENT_LOG_DRAIN_BATCH_SIZE: z.coerce.number().int().positive().default(50),
   // Coalescência de rajada inbound: mensagens do MESMO contato dentro desta
   // janela viram UM job (responder em rajada é gatilho de ban). 0 = sem debounce.
-  INBOUND_DEBOUNCE_MS: z.coerce.number().int().min(0).default(8_000),
+  INBOUND_DEBOUNCE_MS: z.coerce.number().int().min(0).default(3_000),
   // Circuito de saúde do número — ritmo do ticker (block/response rate por número).
   NUMBER_HEALTH_INTERVAL_MS: z.coerce.number().int().positive().default(300_000),
   // Cron persistente por contato — knobs, nunca constantes.

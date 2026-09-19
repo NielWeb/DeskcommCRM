@@ -897,9 +897,13 @@ function agendaSystemBlock(toolIds: readonly string[]): string {
     // Preservar o `inicio` é o contrato de `crm_book_appointment` (`starts_at`). A
     // conjunta recebe dia e hora, não o instante — o parágrafo não se aplica a ela.
     (tem('crm_find_free_slots') && tem('crm_book_appointment')
-      ? 'Se o lead escolheu um horário que VOCÊ já ofereceu nesta conversa com `crm_find_free_slots`, ele já ' +
-        'foi checado: preserve o `inicio` que a ferramenta devolveu e chame `crm_book_appointment` ' +
-        'diretamente. ' +
+      ? 'Se o lead escolheu ou pediu um horário específico e você verificou que ele consta como livre nos slots de ' +
+        '`crm_find_free_slots` (seja porque você consultou a pedido dele, seja porque já havia oferecido), chame ' +
+        'IMEDIATAMENTE `crm_book_appointment` NESTE MESMO TURNO usando o `inicio` correspondente da ferramenta e ' +
+        'confirme o agendamento na sua resposta. NUNCA responda dizendo "vou verificar a disponibilidade e já retorno", ' +
+        'pois você já consultou a ferramenta e os horários estão na sua frente — conclua o agendamento agora. ' +
+        'Se o horário pedido pelo lead NÃO estiver livre na lista, informe educadamente que aquele horário não está disponível ' +
+        'e ofereça imediatamente 2 a 3 horários livres que a ferramenta retornou.\n' +
         'NÃO consulte de novo montando datas/horas em UTC; só consulte outra vez se a reserva recusar o horário.\n'
       : '') +
     // Issue #831: consultar e encerrar o turno é o meio-caminho que deixa o lead sem
@@ -945,7 +949,9 @@ const AGENDA_CONSULTA_SYSTEM_BLOCK =
   'Se o lead mencionou (agora ou em qualquer mensagem anterior da conversa) um dia/horário ' +
   'específico que ainda não foi checado, chame crm_find_free_slots NESTE turno antes de responder. ' +
   'Não repita "vou verificar e te aviso" sem ter chamado a ferramenta — um "vou verificar" só é ' +
-  'aceitável na MESMA resposta em que você já chamou e ela falhou ou não trouxe resultado.\n' +
+  'aceitável na MESMA resposta em que você já chamou e ela falhou ou não trouxe resultado. ' +
+  'Assim que crm_find_free_slots retornar, responda imediatamente informando os horários disponíveis ' +
+  'ou se o horário pedido está livre; nunca diga que vai verificar depois.\n' +
   'Você NÃO tem ferramenta para marcar: quem confirma o horário é uma pessoa da equipe. Então ' +
   'NUNCA diga "confirmado", "está marcado", "reservei" ou equivalente — nem depois de o lead ' +
   'aceitar um horário que você ofereceu. Diga que vai passar para a equipe confirmar. Isso é como ' +

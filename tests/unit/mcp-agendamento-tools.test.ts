@@ -140,6 +140,25 @@ describe("crm_find_free_slots", () => {
     expect(params.ate.toISOString()).toBe("2026-09-14T14:00:00.000Z");
   });
 
+  it("ao consultar um dia específico, não corta a tarde mesmo se limite baixo for passado", async () => {
+    const slots = Array.from({ length: 20 }, (_, i) => ({
+      inicio: new Date(`2026-09-18T${String(11 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 === 0 ? "00" : "30"}:00.000Z`),
+      fim: new Date(`2026-09-18T${String(11 + Math.floor((i + 1) / 2)).padStart(2, "0")}:${(i + 1) % 2 === 0 ? "00" : "30"}:00.000Z`),
+    }));
+    respondeCom({
+      ...SUCESSO,
+      fusoDaRegra: "America/Sao_Paulo",
+      slots,
+    });
+    const r = (await crmFindFreeSlots.handler(
+      { event_type_slug: "c", dia: "2026-09-18", limite: 10 },
+      ctx,
+    )) as { horarios: { inicio: string }[]; total_de_horarios: number; ha_mais: boolean };
+    expect(r.horarios).toHaveLength(20);
+    expect(r.total_de_horarios).toBe(20);
+    expect(r.ha_mais).toBe(false);
+  });
+
   it("não aceita dia específico e período relativo juntos", async () => {
     const r = (await crmFindFreeSlots.handler(
       { event_type_slug: "c", dia: "2026-09-13", dias_a_frente: 7 },

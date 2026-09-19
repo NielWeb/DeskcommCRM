@@ -3,8 +3,8 @@ import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { apiClient } from "@/lib/api/client";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -50,6 +50,8 @@ interface ApiResponse {
 
 export function ModelPicker({ provider, value, onChange, disabled, id, placeholder }: Props) {
   const t = useT();
+  const [customMode, setCustomMode] = React.useState(false);
+
   const query = useQuery({
     queryKey: ["ai", "providers", provider, "models"],
     queryFn: async () => {
@@ -60,11 +62,34 @@ export function ModelPicker({ provider, value, onChange, disabled, id, placehold
   });
 
   const models = query.data ?? [];
+  const valueInCatalog = models.some((m) => m.model_id === value);
+  const isCustom = customMode || (value !== "" && !valueInCatalog && provider === "openrouter");
 
   return (
     <div className="space-y-1">
-      <Label htmlFor={id}>{t("Modelo")}</Label>
-      {models.length === 0 && !query.isLoading ? (
+      <div className="flex items-center justify-between">
+        <Label htmlFor={id}>{t("Modelo")}</Label>
+        {provider === "openrouter" ? (
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            onClick={() => setCustomMode(!isCustom)}
+            disabled={disabled}
+          >
+            {isCustom ? t("Escolher da lista") : t("Digitar modelo customizado")}
+          </button>
+        ) : null}
+      </div>
+
+      {isCustom ? (
+        <Input
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value.trim(), { contextWindow: null })}
+          placeholder="ex: anthropic/claude-3.7-sonnet, deepseek/deepseek-r1"
+          disabled={disabled}
+        />
+      ) : models.length === 0 && !query.isLoading ? (
         <Input
           id={id}
           value={value}
@@ -95,6 +120,11 @@ export function ModelPicker({ provider, value, onChange, disabled, id, placehold
                 {m.is_default_for_provider ? ` · ${t("default")}` : ""}
               </SelectItem>
             ))}
+            {models.length === 0 && !query.isLoading ? (
+              <SelectItem value="__none__" disabled>
+                {t("Nenhum modelo disponível")}
+              </SelectItem>
+            ) : null}
           </SelectContent>
         </Select>
       )}

@@ -411,3 +411,49 @@ describe("#1038 — serviço colado ao verbo, nunca o assunto da frase", () => {
     }
   });
 });
+
+describe("delegação e verbos expandidos de agenda (tenant InterLuz)", () => {
+  const TODAS = ["crm_find_free_slots", "crm_book_appointment", "crm_reschedule_appointment"] as const;
+  const armado = { active: true, ferramentas: TODAS, toolCalledThisTurn: false };
+
+  it("veta 'A equipe vai verificar a disponibilidade'", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: armado,
+        body: "A equipe vai verificar a disponibilidade de horários para sexta-feira.",
+      }),
+    );
+    expect(v.pass).toBe(false);
+  });
+
+  it("veta 'Vou checar a agenda'", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: armado,
+        body: "Vou checar a agenda para ver as vagas disponíveis.",
+      }),
+    );
+    expect(v.pass).toBe(false);
+  });
+
+  it("veta delegação com 'te aviso': 'Assim que tiver os horários te aviso'", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: armado,
+        body: "Assim que tiver os horários te aviso por aqui.",
+      }),
+    );
+    expect(v.pass).toBe(false);
+  });
+
+  it("delegação com tool chamada neste turno passa", () => {
+    const v = agendaStallGate.evaluate(
+      baseCtx({
+        agenda: { active: true, ferramentas: TODAS, toolCalledThisTurn: true },
+        body: "Daniel, te envio os horários disponíveis para sexta-feira.",
+      }),
+    );
+    expect(v.pass).toBe(true);
+  });
+});
+
